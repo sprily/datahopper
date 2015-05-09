@@ -67,7 +67,7 @@ object ResourcePool {
         a = Some(underlying.borrowObject(timeout.toMillis))
       } catch {
         case (e: Exception) =>
-          throw new RuntimeException("Unable to acquire resource")
+          throw new RuntimeException(s"Unable to acquire resource: $e")
       }
 
       var invalidated = false

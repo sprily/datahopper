@@ -49,8 +49,7 @@ trait RequestHandler extends LazyLogging {
 
     val requestRate = rate(Schedule.each(interval))
     val responses = Process.repeatEval(apply(request))
-    (requestRate zip responses) map (_._2)
-    //retryEvery(5.seconds)(requestRate zip responses) map (_._2)
+    retryEvery(Schedule.each(5.seconds))(requestRate zip responses) map (_._2)
   }
 
   private def rate(s: Schedule): Process[Task, TargetLike] = {
@@ -77,13 +76,13 @@ trait RequestHandler extends LazyLogging {
     }
   }
 
-  private def retryEvery[A](interval: FiniteDuration)
+  private def retryEvery[A](schedule: Schedule)
                            (p: Process[Task,A])
                            (implicit s: ScheduledExecutorService): Process[Task,A] = {
 
     val logErrors = channel.lift[Task,Throwable,Unit](t => Task { logger.warn(s"Request error: $t") })
 
-    time.awakeEvery(interval).flatMap { _ =>
+    rate(schedule).flatMap { _ =>
       p.attempt().observeW(logErrors).stripW
     }
   }
