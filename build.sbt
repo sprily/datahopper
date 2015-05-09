@@ -46,7 +46,7 @@ lazy val root = (project in file (".")).
   settings(publishingSettings:_*).
   settings(
     packagedArtifacts := Map.empty
-  ).aggregate(harvester, modbus)
+  ).aggregate(harvester, modbus, util)
 
 lazy val util = (project in file("util")).
   settings(commonSettings: _*).
@@ -75,4 +75,4 @@ lazy val modbus = (project in file("modbus")).
       "uk.co.sprily"       % "com.ghgande.j2mod"   % "1.03"
     )
   ).
-  dependsOn(harvester)
+  dependsOn(harvester, util)
