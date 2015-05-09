@@ -2,108 +2,92 @@ package uk.co.sprily
 package dh
 package util
 
-import java.util.concurrent._
 import scala.concurrent.duration._
 
 import com.typesafe.scalalogging.LazyLogging
 
+import org.apache.commons.pool2.PooledObject
+import org.apache.commons.pool2.BasePooledObjectFactory
+import org.apache.commons.pool2.PooledObjectFactory
+import org.apache.commons.pool2.impl.DefaultPooledObject
+import org.apache.commons.pool2.impl.GenericObjectPool
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig
+
 trait ResourcePool[A] {
-  def withResource[B](action: A => B): B
+  def withResource[B](timeout: FiniteDuration)(action: A => B): B
+  def close(): Unit
 }
 
 object ResourcePool {
 
-  def apply[A](es: ScheduledExecutorService)
-              (create: => A,
+  def apply[A](create: => A,
                isValid: A => Boolean,
                destroy: A => Unit,
                maxResources: Int,
                timeout: FiniteDuration): ResourcePool[A] = {
-    new ResourcePoolImpl(es, create, isValid, destroy, maxResources, timeout)
+    new ApacheResourcePoolImpl[A](create, isValid, destroy, maxResources, timeout)
   }
 
-  private class ResourcePoolImpl[A](es: ScheduledExecutorService,
-                                    create: => A,
-                                    isValid: A => Boolean,
-                                    destroy: A => Unit,
-                                    maxResources: Int,
-                                    timeout: FiniteDuration) extends ResourcePool[A]
-                                                                with LazyLogging {
+  private class ApacheResourcePoolImpl[A](
+      create: => A,
+      isValid: A => Boolean,
+      destroy: A => Unit,
+      maxResources: Int,
+      timeout: FiniteDuration) extends ResourcePool[A] with LazyLogging { self =>
 
-    val taskF = es.scheduleAtFixedRate(new Runnable { def run() = sweep() },
-                                       (timeout / 2).toMillis,
-                                       (timeout / 2).toMillis,
-                                       TimeUnit.MILLISECONDS)
+  
+    private[this] val factory: PooledObjectFactory[A] = new BasePooledObjectFactory[A] {
+      override def create: A = self.create
+      override def wrap(a: A) = new DefaultPooledObject[A](a)
+      override def destroyObject(pA: PooledObject[A]) = self.destroy(pA.getObject)
+      override def validateObject(pA: PooledObject[A]) = self.isValid(pA.getObject)
+    }
 
-    private[this] val numAvailable = new Semaphore(maxResources, true)
+    private[this] val config = {
+      val cfg = new GenericObjectPoolConfig()
+      cfg.setMaxIdle(maxResources)
+      cfg.setMinIdle(0)
+      cfg.setMaxTotal(maxResources)
+      cfg
+    }
 
-    // sorted by Deadline (oldest first)
-    @volatile private[this] var available = Vector.empty[(Deadline,A)]
+    private[this] val underlying = {
+      val pool = new GenericObjectPool[A](factory, config)
+      pool.setMinEvictableIdleTimeMillis(timeout.toMillis)
+      pool.setTimeBetweenEvictionRunsMillis((timeout / 2).toMillis)
+      pool.setLifo(true)
+      pool.setTestOnReturn(true)
+      pool
+    }
 
-    def withResource[B](action: A => B): B = {
-      val a = acquire()
+    override def withResource[B](timeout: FiniteDuration)(action: A => B): B = {
+
+      var a: Option[A] = None
       try {
-        logger.debug(s"Performing action on resource")
-        action(a)
+        a = Some(underlying.borrowObject(timeout.toMillis))
+      } catch {
+        case (e: Exception) =>
+          throw new RuntimeException("Unable to acquire resource")
+      }
+
+      var invalidated = false
+      try {
+        action(a.get)
       } catch {
         case (e: Exception) =>
           logger.warn(s"Caught exception performing action on $a: $e")
-          tryDestroy(a)
+          invalidated = true
+          underlying.invalidateObject(a.get)
           throw e
       } finally {
-        release(a)
+        if (!invalidated) { underlying.returnObject(a.get) }
       }
     }
 
-    private[this] def release(a: A): Unit = {
-      logger.debug(s"Attempting to release Resource $a")
-      if (isValid(a)) {
-        synchronized { available = available :+ ((Deadline.now, a)) }
-      }
-      numAvailable.release()
-    }
-
-    private[this] def acquire(): A = {
-      try {
-        logger.debug("Attempting to acquire Resource")
-        numAvailable.acquire()  // blocking
-        logger.debug("Resource acquisition allowed, picking available...")
-        pickAvailable()
-      } catch {
-        case e: Exception =>
-          logger.warn(s"Exception caught acquiring Resource: $e")
-          numAvailable.release()
-          throw e
-      }
-    }
-
-    private[this] def pickAvailable(): A = synchronized {
-      available match {
-        case as :+ ((_,a)) if  isValid(a) => available = as ; a
-        case as :+ ((_,a)) if !isValid(a) => available = as ; tryDestroy(a) ; pickAvailable
-        case _                            => create
-      }
-    }
-
-    private[this] def sweep() = synchronized {
-      logger.info(s"Sweeping for stale Resources")
-      val now = Deadline.now
-      available.takeWhile(_._1 + timeout < now)
-               .foreach { case(_,a) => tryDestroy(a) }
-      available = available.dropWhile(_._1 + timeout < now)
-    }
-
-    private[this] def tryDestroy(a: A) = swallowExceptionsIn {
-      logger.info(s"Destroying Resource: $a")
-      destroy(a)
-    }
-
-    private[this] def swallowExceptionsIn[T](body: => T) = {
-      try { body } catch {
-        case e: Exception =>
-          logger.warn(s"Swallowed exception: $e")
-      }
+    override def close(): Unit = {
+      underlying.close()
     }
 
   }
+
 }

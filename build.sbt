@@ -51,7 +51,10 @@ lazy val root = (project in file (".")).
 lazy val util = (project in file("util")).
   settings(commonSettings: _*).
   settings(
-    name := "dh-util"
+    name := "dh-util",
+    libraryDependencies ++= Seq(
+      "org.apache.commons" % "commons-pool2" % "2.3"
+    )
   )
 
 lazy val harvester = (project in file("harvester")).

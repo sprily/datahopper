@@ -1,7 +1,6 @@
 package uk.co.sprily.dh
 package util
 
-import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration._
 
@@ -9,21 +8,20 @@ import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import org.specs2.time.NoTimeConversions
 
-class ResourcePoolSpec extends Specification with ScalaCheck
-                                             with NoTimeConversions {
+class ResourcePoolSpec extends Specification with ScalaCheck {
 
   "Resource Pool" should {
 
     "provide mutual exclusion" in {
-      withES { es =>
-        val singleResource = new Resource()
-        val pool = ResourcePool(es)(
-          create = singleResource,
-          isValid = const(true),
-          destroy = unit,
-          maxResources = 1,
-          timeout = 5.seconds)
+      val singleResource = new Resource()
+      val p = ResourcePool.apply(
+        create = singleResource,
+        isValid = const(true),
+        destroy = unit,
+        maxResources = 1,
+        timeout = 5.seconds)
 
+      withPool(p) { pool =>
         val ws = for (i <- 0 until 3) yield new Worker(pool, iters=1000)
         ws.foreach(_.start())
         ws.foreach(_.join())
@@ -33,20 +31,20 @@ class ResourcePoolSpec extends Specification with ScalaCheck
     }
 
     "create no more than the max number of resources" in {
-      withES { es =>
-        val numCreated = new AtomicInteger()
-        def create() = {
-          numCreated.incrementAndGet()
-          new Resource()
-        }
+      val numCreated = new AtomicInteger()
+      def create() = {
+        numCreated.incrementAndGet()
+        new Resource()
+      }
 
-        val pool = ResourcePool(es)(
-          create = create,
-          isValid = const(true),
-          destroy = unit,
-          maxResources = 4,
-          timeout = 5.seconds)
+      val p = ResourcePool.apply(
+        create = create,
+        isValid = const(true),
+        destroy = unit,
+        maxResources = 4,
+        timeout = 5.seconds)
 
+      withPool(p) { pool =>
         val ws = for (i <- 0 until 10) yield new Worker(pool, iters=1000)
         ws.foreach(_.start())
         ws.foreach(_.join())
@@ -56,33 +54,32 @@ class ResourcePoolSpec extends Specification with ScalaCheck
     }
 
     "not lease out a destroyed Resource" in {
-      withES { es =>
-        val numCreated = new AtomicInteger()
-        def create() = {
-          numCreated.incrementAndGet()
-          new Resource()
-        }
+      val numCreated = new AtomicInteger()
+      def create() = {
+        numCreated.incrementAndGet()
+        new Resource()
+      }
 
-        val pool = ResourcePool(es)(
-          create = create,
-          isValid = const(false),
-          destroy = unit,
-          maxResources = 4,
-          timeout = 5.seconds)
+      val p = ResourcePool.apply(
+        create = create,
+      isValid = (r: Resource) => !r.beenAcquired,
+        destroy = unit,
+        maxResources = 4,
+        timeout = 5.seconds)
 
-        val ws = for (i <- 0 until 10) yield new Worker(pool, iters=2)
+      withPool(p) { pool =>
+        val ws = for (i <- 0 until 3) yield new Worker(pool, iters=2)
         ws.foreach(_.start())
         ws.foreach(_.join())
 
-        numCreated.get() must === (2 * 10)
       }
+      numCreated.get() must === (2 * 3)
     }
 
   }
 
-  private def withES[T](body: ScheduledExecutorService => T) = {
-    val es = new ScheduledThreadPoolExecutor(1)
-    try { body(es) } finally { es.shutdownNow() }
+  private def withPool[S,T](pool: ResourcePool[S])(body: ResourcePool[S] => T) = {
+    try { body(pool) } finally { pool.close() }
   }
 
   private def const[S,T](t: T): S => T = { s: S => t }
@@ -92,7 +89,7 @@ class ResourcePoolSpec extends Specification with ScalaCheck
                        iters: Int = 100) extends Thread {
     override def run() = {
       for (i <- 0 until iters) {
-        pool.withResource { r =>
+        pool.withResource(2.seconds) { r =>
           r.workerAcquired()
           r.workerReleased()
         }
@@ -102,11 +99,12 @@ class ResourcePoolSpec extends Specification with ScalaCheck
 
   private class Resource {
 
-    // deliberately no mutex for accessing this
+    // deliberately no mutex for accessing these, as that's the job of the pool!
     @volatile var numAcqs = 0L
     @volatile var destroyed = false
+    @volatile var beenAcquired = false
 
-    def workerAcquired() = { numAcqs = numAcqs + 1 }
+    def workerAcquired() = { numAcqs = numAcqs + 1 ; beenAcquired = true }
     def workerReleased() = { numAcqs = numAcqs - 1 }
   }
 

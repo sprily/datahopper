@@ -7,7 +7,8 @@ import java.net.InetAddress
 import scala.concurrent.duration._
 import scala.collection.mutable.{Map => MMap}
 
-import com.github.nscala_time.time.Imports._
+import com.github.nscala_time.time.Imports.DateTime
+import com.github.nscala_time.time.Imports.DateTimeZone
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -93,7 +94,7 @@ class ModbusRequestHandler(
         pools.get(gateway).get
       }
 
-      pool.withResource(body)
+      pool.withResource(3.seconds)(body)
 
     }(ioPool)
   }
@@ -106,7 +107,7 @@ class ModbusRequestHandler(
     }
 
     logger.info(s"Creating new pool for $gw")
-    ResourcePool.apply(Strategy.DefaultTimeoutScheduler)(
+    ResourcePool.apply(
       create = mkConnection(gw),
       isValid = { c: TCPMasterConnection => c.isConnected },
       destroy = destroyConn _,
