@@ -41,6 +41,12 @@ lazy val publishingSettings = Seq(
   }
 )
 
+lazy val root = (project in file (".")).
+  settings(publishingSettings:_*).
+  settings(
+    packagedArtifacts := Map.empty
+  ).aggregate(harvester, modbus)
+
 lazy val harvester = (project in file("harvester")).
   settings(commonSettings: _*).
   settings(
