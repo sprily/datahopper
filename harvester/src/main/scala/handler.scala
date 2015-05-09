@@ -36,6 +36,11 @@ trait RequestHandler extends LazyLogging {
   type Request <: RequestLike
   type Response <: ResponseLike
 
+  // Some handlers are going to require life-cycle management, eg. setting
+  // up TCP connection pools.
+  def startup(): Unit = { }
+  def shutdown(): Unit = { }
+
   def apply(request: Request): Task[Response]
 
   final def recurring(request: Request, interval: FiniteDuration): Process[Task, Response] = {

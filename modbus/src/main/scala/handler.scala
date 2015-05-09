@@ -55,6 +55,13 @@ class ModbusRequestHandler(
   // a pool for each gateway
   private[this] val pools = MMap.empty[Gateway, ResourcePool[TCPMasterConnection]]
 
+  override def shutdown(): Unit = {
+    pools.synchronized {
+      pools.values.foreach(_.close())
+      pools.clear()
+    }
+  }
+
   override def apply(request: ModbusRequest): Task[ModbusResponse] = {
     single(request).map { bytes =>
       ModbusResponse(request.device, DateTime.now(DateTimeZone.UTC), bytes)
