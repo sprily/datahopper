@@ -17,6 +17,7 @@ import scalaz.concurrent.Strategy
 import scodec.bits.ByteVector
 
 import dh.harvester._
+import dh.util.ResourcePool
 
 case class ModbusRequest(
     device: ModbusDevice,
@@ -53,19 +54,19 @@ class ModbusRequestHandler(
   // a pool for each gateway
   private[this] val pools = MMap.empty[Gateway, ResourcePool[TCPMasterConnection]]
 
-  override def process(request: ModbusRequest): Task[ModbusResponse] = {
+  override def apply(request: ModbusRequest): Task[ModbusResponse] = {
     single(request).map { bytes =>
-      ModbusResponse(request.device, LocalDateTime.now(DateTimeZone.UTC), bytes)
+      ModbusResponse(request.device, DateTime.now(DateTimeZone.UTC), bytes)
     }
   }
 
   private def single(request: ModbusRequest) = {
-    val unit = request.device.address.deviceNumber
+    val unit = request.device.unit
 
     withConnection(request.device) { conn =>
       logger.debug(s"Handling modbus request: $request")
       val req = new ReadMultipleRegistersRequest(
-        request.selection.startRegister,
+        request.selection.start,
         request.selection.numRegisters)
       req.setUnitID(unit)
       val tx = new ModbusTCPTransaction(conn)

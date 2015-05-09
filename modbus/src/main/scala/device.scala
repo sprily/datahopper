@@ -29,5 +29,9 @@ case class ModbusNetLoc(
 
 case class RegRange(
     start: Int,
-    end: Int)
+    end: Int) {
+
+  def numRegisters = (end - start) + 1
+
+}
 

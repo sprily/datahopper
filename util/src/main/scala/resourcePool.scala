@@ -1,4 +1,5 @@
-package uk.co.sprily.dh
+package uk.co.sprily
+package dh
 package util
 
 import java.util.concurrent._
