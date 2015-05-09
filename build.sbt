@@ -12,7 +12,7 @@ lazy val commonSettings = Seq(
     "-unchecked"),
   libraryDependencies ++= commonDependencies,
   resolvers ++= commonResolvers
-)
+) ++ publishingSettings
 
 lazy val commonResolvers = Seq(
   "scalaz-bintray"         at "http://dl.bintray.com/scalaz/releases",
@@ -29,6 +29,16 @@ lazy val commonDependencies = Seq(
   // testing
   "org.specs2"                  %% "specs2-core"          % "3.6"         % "test",
   "org.specs2"                  %% "specs2-junit"         % "3.6"         % "test"
+)
+
+lazy val publishingSettings = Seq(
+  publishTo := {
+    val nexus = "https://repo.sprily.co.uk/nexus/"
+    if (version.value.trim.endsWith("SNAPSHOT"))
+      Some("snapshots" at nexus + "content/repositories/snapshots")
+    else
+      Some("releases"  at nexus + "content/repositories/releases")
+  }
 )
 
 lazy val harvester = (project in file("harvester")).
