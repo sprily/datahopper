@@ -13,6 +13,8 @@ import com.typesafe.scalalogging.LazyLogging
 import scalaz.concurrent._
 import scalaz.stream._
 
+import uk.co.sprily.dh.scheduling._
+
 trait RequestLike {
   type Device <: DeviceLike
   type Selection = Device#AddressSpace
@@ -40,9 +42,34 @@ trait RequestHandler extends LazyLogging {
     implicit val Strat = Strategy.DefaultStrategy
     implicit val Sched = Strategy.DefaultTimeoutScheduler
 
-    val requestRate = time.awakeEvery(interval)
+    val requestRate = rate(Schedule.each(interval))
     val responses = Process.repeatEval(apply(request))
-    retryEvery(5.seconds)(requestRate zip responses) map (_._2)
+    (requestRate zip responses) map (_._2)
+    //retryEvery(5.seconds)(requestRate zip responses) map (_._2)
+  }
+
+  private def rate(s: Schedule): Process[Task, TargetLike] = {
+    implicit val Strat = Strategy.DefaultStrategy
+    implicit val Sched = Strategy.DefaultTimeoutScheduler
+
+    def next(t: s.Target) = Process.await(Task.delay(s.completed(t))) { t => go(t) }
+
+    def go(target: Option[s.Target]): Process[Task, s.Target] = {
+      target match {
+        case None    => Process.halt
+        case Some(t) => sleep(t) ++ Process.emit(t) ++ next(t)
+      }
+    }
+
+    val t0 = Task.delay(Some(s.start()))
+    Process.await(t0) { t => go(t) }
+  }
+
+  private def sleep(t: TargetLike)(implicit es: ScheduledExecutorService) = {
+    t.initialDelay() match {
+      case Duration.Zero => Process.empty
+      case d             => time.sleep(d)
+    }
   }
 
   private def retryEvery[A](interval: FiniteDuration)

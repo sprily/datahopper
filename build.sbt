@@ -46,7 +46,7 @@ lazy val root = (project in file (".")).
   settings(publishingSettings:_*).
   settings(
     packagedArtifacts := Map.empty
-  ).aggregate(harvester, modbus, util)
+  ).aggregate(harvester, modbus, util, scheduling)
 
 lazy val util = (project in file("util")).
   settings(commonSettings: _*).
@@ -55,6 +55,12 @@ lazy val util = (project in file("util")).
     libraryDependencies ++= Seq(
       "org.apache.commons" % "commons-pool2" % "2.3"
     )
+  )
+
+lazy val scheduling = (project in file("scheduling")).
+  settings(commonSettings: _*).
+  settings(
+    name := "dh-scheduling"
   )
 
 lazy val harvester = (project in file("harvester")).
@@ -68,7 +74,8 @@ lazy val harvester = (project in file("harvester")).
       "org.typelevel"          %% "scodec-bits"         % "1.0.4",
       "com.github.nscala-time" %% "nscala-time"         % "2.0.0"
     )
-  )
+  ).
+  dependsOn(scheduling)
 
 lazy val modbus = (project in file("modbus")).
   settings(commonSettings: _*).
