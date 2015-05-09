@@ -28,7 +28,8 @@ lazy val commonDependencies = Seq(
 
   // testing
   "org.specs2"                  %% "specs2-core"          % "3.6"         % "test",
-  "org.specs2"                  %% "specs2-junit"         % "3.6"         % "test"
+  "org.specs2"                  %% "specs2-junit"         % "3.6"         % "test",
+  "org.specs2"                  %% "specs2-scalacheck"    % "3.6"         % "test"
 )
 
 lazy val publishingSettings = Seq(
@@ -46,6 +47,12 @@ lazy val root = (project in file (".")).
   settings(
     packagedArtifacts := Map.empty
   ).aggregate(harvester, modbus)
+
+lazy val util = (project in file("util")).
+  settings(commonSettings: _*).
+  settings(
+    name := "dh-util"
+  )
 
 lazy val harvester = (project in file("harvester")).
   settings(commonSettings: _*).
