@@ -10,11 +10,15 @@ import harvester._
 
 case class ModbusDevice(
     id: DeviceId,
-    address: ModbusNetLoc) extends DeviceLike {
+    host: InetAddress,
+    port: Int,
+    unit: Int) extends DeviceLike {
 
   type NetLoc = ModbusNetLoc
   type AddressSpace = RegRange
   type Measurement = ByteVector
+
+  def address = ModbusNetLoc(host, port, unit)
 
 }
 
@@ -25,5 +29,9 @@ case class ModbusNetLoc(
 
 case class RegRange(
     start: Int,
-    end: Int)
+    end: Int) {
+
+  def numRegisters = (end - start) + 1
+
+}
 
