@@ -16,6 +16,7 @@ lazy val commonSettings = Seq(
 
 lazy val commonResolvers = Seq(
   "scalaz-bintray"         at "http://dl.bintray.com/scalaz/releases",
+  "Sprily Releases"        at "https://repo.sprily.co.uk/nexus/content/repositories/releases",
   "Sprily 3rd Party"       at "https://repo.sprily.co.uk/nexus/content/repositories/thirdparty"
 )
 
