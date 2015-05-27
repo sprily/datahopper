@@ -43,13 +43,18 @@ trait RequestHandler extends LazyLogging {
 
   def apply(request: Request): Task[Response]
 
-  final def recurring(request: Request, interval: FiniteDuration): Process[Task, Response] = {
+  final def responses(requests: Process[Task,Request],
+                      interval: FiniteDuration): Process[Task, (Request,Response)] = {
     implicit val Strat = Strategy.DefaultStrategy
     implicit val Sched = Strategy.DefaultTimeoutScheduler
 
     val requestRate = rate(Schedule.each(interval))
-    val responses = Process.repeatEval(apply(request))
+    val responses = requests.flatMap(req => Process.eval(apply(req)).map(res => (req,res)))
     retryEvery(Schedule.each(5.seconds))(requestRate zip responses) map (_._2)
+  }
+
+  final def recurring(request: Request, interval: FiniteDuration): Process[Task, Response] = {
+    responses(Process.constant(request), interval).map(_._2)
   }
 
   private def rate(s: Schedule): Process[Task, TargetLike] = {
