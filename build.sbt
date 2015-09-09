@@ -2,7 +2,7 @@ import sbt.Project.projectToRef
 
 lazy val commonSettings = Seq(
   organization := "uk.co.sprily",
-  version := "0.1.2-SNAPSHOT",
+  version := "0.1.4-SNAPSHOT",
   scalaVersion := "2.11.6",
   scalacOptions ++= Seq(
     "-feature",
