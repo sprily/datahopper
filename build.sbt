@@ -54,7 +54,10 @@ lazy val util = (project in file("util")).
   settings(
     name := "dh-util",
     libraryDependencies ++= Seq(
-      "org.apache.commons" % "commons-pool2" % "2.3"
+      "org.apache.commons"      % "commons-pool2"       % "2.3",
+      "org.scalaz"             %% "scalaz-core"         % "7.1.1",
+      "org.scalaz"             %% "scalaz-concurrent"   % "7.1.1",
+      "org.scalaz.stream"      %% "scalaz-stream"       % "0.7a"
     )
   )
 
